@@ -454,11 +454,7 @@ body {
   <div class="page-header">
     <div class="page-eyebrow">Google Calendar</div>
     <div class="page-title">Your <em>Reminders</em></div>
-    <div class="page-desc">Connect your Google Calendar once, then add any reminder with one click.</div>
-    <div style="margin-top:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-      <button id="gcal-connect-btn" class="add-btn" style="padding:10px 22px;font-size:12px;" onclick="connectGoogle()">Connect Google Calendar</button>
-      <span id="gcal-status" style="font-size:12px;color:var(--ink-l);font-style:italic;"></span>
-    </div>
+    <div class="page-desc">Add individual reminders or send the entire schedule to Google Calendar in one action.</div>
   </div>
   <div class="page-body">
     <div id="cal-list"></div>
@@ -514,76 +510,6 @@ body {
 </main>
 
 <script>
-
-// ═══════════════════════════════════════════════════
-// CONFIG — points to your Vercel backend
-// Change VERCEL_URL to your deployed Vercel project URL
-// e.g. "https://johnson-fitness.vercel.app"
-// Leave as empty string to auto-detect (works when served from Vercel itself)
-// ═══════════════════════════════════════════════════
-const VERCEL_URL = '';  // <-- set this after deploying to Vercel
-
-function apiBase() {
-  if (VERCEL_URL) return VERCEL_URL;
-  // If served from Vercel itself, same origin works
-  if (location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') {
-    return location.origin;
-  }
-  // Local dev fallback
-  return 'http://localhost:3000';
-}
-
-// ── GOOGLE OAUTH STATE ────────────────────────────
-let googleAccessToken = null;
-
-function parseTokenFromHash() {
-  if (!location.hash) return;
-  const params = new URLSearchParams(location.hash.slice(1));
-  const token = params.get('access_token');
-  if (token) {
-    googleAccessToken = token;
-    localStorage.setItem('goog_access_token', token);
-    // Clean URL
-    history.replaceState(null, '', location.pathname);
-    showToast('Google Calendar connected', 'success');
-    updateCalendarConnectBtn();
-  }
-}
-
-function loadStoredToken() {
-  googleAccessToken = localStorage.getItem('goog_access_token') || null;
-}
-
-function updateCalendarConnectBtn() {
-  const btn = document.getElementById('gcal-connect-btn');
-  if (!btn) return;
-  if (googleAccessToken) {
-    btn.textContent = 'Connected';
-    btn.style.background = 'var(--cream2)';
-    btn.style.color = 'var(--brown-d)';
-    btn.style.borderColor = 'var(--brown-l)';
-    btn.style.cursor = 'default';
-    btn.onclick = null;
-  } else {
-    btn.textContent = 'Connect Google Calendar';
-    btn.style = '';
-    btn.onclick = connectGoogle;
-  }
-}
-
-function connectGoogle() {
-  const clientId = '%%GOOGLE_CLIENT_ID%%'; // replaced at build or left for user
-  if (!clientId || clientId.startsWith('%%')) {
-    showToast('Set your Google Client ID in the app config first', 'error');
-    return;
-  }
-  const redirectUri = encodeURIComponent(apiBase() + '/api/auth/google');
-  const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar.events');
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
-  window.location.href = url;
-}
-
-
 const meals = {
   mon:[
     { time:"5:00 AM", type:"Pre-Workout", name:"Ndizi Mbili na Karanga", detail:"2 ripe bananas with a small handful of groundnuts. Quick fuel before your 5 AM workout. Prepare the night before — takes 30 seconds.", kcal:310 },
@@ -799,48 +725,6 @@ function addLog(msg, cls='') {
 }
 
 async function callCal(ev) {
-  if (!googleAccessToken) {
-    throw new Error('Google Calendar not connected. Click "Connect Google Calendar" first.');
-  }
-
-  const res = await fetch(apiBase() + '/api/calendar', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + googleAccessToken,
-    },
-    body: JSON.stringify({
-      title:       ev.title,
-      time:        ev.time,
-      recurrence:  ev.recurrence,
-      description: ev.note,
-      colorId:     ev.colorId || '2',
-    }),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    if (res.status === 401) {
-      googleAccessToken = null;
-      localStorage.removeItem('goog_access_token');
-      updateCalendarConnectBtn();
-    }
-    throw new Error(data.error || 'Calendar API error');
-  }
-  return data;
-}
-
-
-function addLog(msg, cls='') {
-  const el = document.getElementById('status-log');
-  el.classList.add('visible');
-  const d = document.createElement('div');
-  if(cls) d.className = cls;
-  d.textContent = msg;
-  el.appendChild(d); el.scrollTop = el.scrollHeight;
-}
-
-async function callCal(ev) {
   const now = new Date().toISOString().split('T')[0];
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -912,8 +796,8 @@ async function analyzeProgress() {
   const w = document.getElementById('p-weight').value;
   if (!w) { showToast('Please enter your weight to continue.', 'error'); return; }
 
-  const result  = document.getElementById('analysis-result');
-  const btn     = document.querySelector('[onclick="analyzeProgress()"]');
+  const result = document.getElementById('analysis-result');
+  const btn = document.querySelector('[onclick="analyzeProgress()"]');
   const btnSpan = btn ? btn.querySelector('span') : null;
 
   result.className = 'analysis-result visible';
@@ -921,28 +805,53 @@ async function analyzeProgress() {
   if (btn) btn.disabled = true;
   if (btnSpan) btnSpan.textContent = 'Analysing…';
 
+  const waist    = document.getElementById('p-waist').value    || 'not given';
+  const chest    = document.getElementById('p-chest').value    || 'not given';
+  const arm      = document.getElementById('p-arm').value      || 'not given';
+  const energy   = document.getElementById('p-energy').value   || 'not given';
+  const appetite = document.getElementById('p-appetite').value || 'not given';
+  const wkouts   = document.getElementById('p-workouts').value || 'not given';
+
+  const prompt = `You are Johnson Saimon's Tanzanian fitness coach. He is 24, started at 52 kg, target 56–58 kg in 3 months via bodyweight training at home. Daily target 2,400–2,500 kcal, 130g protein. He uses local Tanzanian foods only — no supplements, no imported foods.
+
+Monthly check-in data:
+- Current weight: ${w} kg (started at 52 kg)
+- Waist: ${waist} cm
+- Chest: ${chest} cm
+- Upper arm: ${arm} cm
+- Energy level: ${energy}/10
+- Appetite: ${appetite}/10
+- Workouts completed this month: ${wkouts}
+
+Write a short, warm, direct coaching response in plain text only — no bullet points, no markdown, no asterisks, no headers. Cover: (1) honest progress assessment, (2) one specific food or portion adjustment using local Tanzanian foods like maharage, dagaa, wali, ndizi, mayai, or karanga, (3) one specific workout adjustment, and (4) one motivational line for a student juggling university and 3 jobs. Maximum 130 words.`;
+
   try {
-    const res = await fetch(apiBase() + '/api/analyze', {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': '',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
-        weight:    w,
-        waist:     document.getElementById('p-waist').value    || '',
-        chest:     document.getElementById('p-chest').value    || '',
-        arm:       document.getElementById('p-arm').value      || '',
-        energy:    document.getElementById('p-energy').value   || '',
-        appetite:  document.getElementById('p-appetite').value || '',
-        workouts:  document.getElementById('p-workouts').value || '',
-      }),
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Server error');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${res.status}`);
+    }
 
-    result.textContent = data.result;
+    const data = await res.json();
+    const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || 'No response received.';
+    result.textContent = text;
     showToast('Analysis complete', 'success');
   } catch (e) {
-    result.innerHTML = `<span style="color:#8B2020;">Could not connect: ${e.message}</span>`;
+    result.innerHTML = `<span style="color:#8B2020;">Could not connect to AI coach: ${e.message}</span>`;
     showToast('Analysis failed — check connection', 'error');
   } finally {
     if (btn) btn.disabled = false;
@@ -950,6 +859,36 @@ async function analyzeProgress() {
   }
 }
 
+function showPage(id, clickedBtn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  if(clickedBtn) clickedBtn.classList.add('active');
+  else {
+    const map={dashboard:0,nutrition:1,workout:2,shopping:3,calendar:4,progress:5};
+    const items=document.querySelectorAll('.nav-item');
+    if(items[map[id]]) items[map[id]].classList.add('active');
+  }
+  window.scrollTo(0,0);
+}
+
+// INIT
+const dayKeys=['sun','mon','tue','wed','thu','fri','sat'];
+const todayKey=dayKeys[new Date().getDay()];
+const dashMeals=document.getElementById('dash-meals');
+let dh='';
+meals[todayKey].slice(0,4).filter(m=>m.kcal>0).forEach(m=>{
+  dh+=`<div class="meal-entry"><div class="meal-time-col">${m.time}</div><div><div class="meal-type">${m.type}</div><div class="meal-foods-name">${m.name}</div></div><div class="meal-kcal">${m.kcal}<span class="meal-kcal-unit">kcal</span></div></div>`;
+});
+dashMeals.innerHTML=dh;
+
+const dayIdx={mon:0,tue:1,wed:2,thu:3,fri:4,sat:5,sun:6};
+const cells=document.querySelectorAll('.week-cell');
+if(dayIdx[todayKey]!==undefined && cells[dayIdx[todayKey]]) cells[dayIdx[todayKey]].classList.add('today');
+
+document.getElementById('meal-content').innerHTML=renderMeals('mon');
+document.getElementById('workout-content').innerHTML=renderWorkout('mon');
+renderCalEvents();
 
 // ── TOAST SYSTEM ──────────────────────────────────
 function showToast(msg, type = 'info') {
